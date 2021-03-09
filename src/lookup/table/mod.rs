@@ -1,18 +1,18 @@
 use crate::{kzg10, multiset::MultiSet};
-use algebra::{bls12_381::Fr, Bls12_381};
-use ff_fft::{DensePolynomial as Polynomial, EvaluationDomain};
-use poly_commit::kzg10::{Commitment, Powers};
+use ark_bls12_381::{fr::Fr, Bls12_381};
+use ark_poly::{univariate::DensePolynomial as DensePoly, EvaluationDomain, GeneralEvaluationDomain};
+use ark_poly_commit::kzg10::{Commitment, Powers};
 use std::collections::HashMap;
-
+use ark_poly::UVPolynomial;
 pub mod four_bits;
 pub mod generic;
 pub use generic::Generic;
 
 pub struct PreProcessedTable {
     pub n: usize,
-    pub t_1: (MultiSet, Commitment<Bls12_381>, Polynomial<Fr>),
-    pub t_2: (MultiSet, Commitment<Bls12_381>, Polynomial<Fr>),
-    pub t_3: (MultiSet, Commitment<Bls12_381>, Polynomial<Fr>),
+    pub t_1: (MultiSet, Commitment<Bls12_381>, DensePoly<Fr>),
+    pub t_2: (MultiSet, Commitment<Bls12_381>, DensePoly<Fr>),
+    pub t_3: (MultiSet, Commitment<Bls12_381>, DensePoly<Fr>),
 }
 
 pub trait LookUpTable {
@@ -69,7 +69,7 @@ pub trait LookUpTable {
         assert_eq!(t_2.len(), k);
         assert_eq!(t_3.len(), k);
 
-        let domain: EvaluationDomain<Fr> = EvaluationDomain::new(n).unwrap();
+        let domain = GeneralEvaluationDomain::<Fr>::new(n).unwrap();
 
         // Pad
         let pad_by = n - t_1.len();
@@ -77,9 +77,9 @@ pub trait LookUpTable {
         t_2.extend(pad_by, t_2.last());
         t_3.extend(pad_by, t_3.last());
 
-        let t_1_poly = Polynomial::from_coefficients_vec(domain.ifft(&t_1.0));
-        let t_2_poly = Polynomial::from_coefficients_vec(domain.ifft(&t_2.0));
-        let t_3_poly = Polynomial::from_coefficients_vec(domain.ifft(&t_3.0));
+        let t_1_poly = DensePoly::from_coefficients_vec(domain.ifft(&t_1.0));
+        let t_2_poly = DensePoly::from_coefficients_vec(domain.ifft(&t_2.0));
+        let t_3_poly = DensePoly::from_coefficients_vec(domain.ifft(&t_3.0));
 
         let t_1_commit = kzg10::commit(commit_key, &t_1_poly);
         let t_2_commit = kzg10::commit(commit_key, &t_2_poly);

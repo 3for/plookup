@@ -1,6 +1,7 @@
 use crate::multiset::MultiSet;
-use algebra::bls12_381::Fr;
+use ark_bls12_381::Fr;
 use num_traits::identities::One;
+
 
 /// Computes the multisets h_1 and h_2
 pub fn compute_h1_h2(f: &MultiSet, t: &MultiSet) -> (MultiSet, MultiSet) {
@@ -88,7 +89,9 @@ pub fn compute_accumulator_values(
 #[cfg(test)]
 mod test {
     use super::*;
-    use ff_fft::{DensePolynomial as Polynomial, EvaluationDomain};
+    use ark_poly::{univariate::DensePolynomial as DensePoly, EvaluationDomain, GeneralEvaluationDomain};
+    use ark_poly::Polynomial;
+    use ark_poly::UVPolynomial;
 
     #[test]
     fn test_manually_compute_z() {
@@ -216,7 +219,7 @@ mod test {
 
         // Compute h_1(x) and h_2(x) from f and t
         let (h_1, h_2) = compute_h1_h2(&f, &t);
-        let domain: EvaluationDomain<Fr> = EvaluationDomain::new(h_1.len()).unwrap();
+        let domain = GeneralEvaluationDomain::<Fr>::new(h_1.len()).unwrap();
         let h_1_poly = h_1.to_polynomial(&domain);
         let h_2_poly = h_2.to_polynomial(&domain);
 
@@ -224,8 +227,8 @@ mod test {
         let last_element = domain.elements().last().unwrap();
         let first_element = Fr::one();
 
-        let h_1_last = h_1_poly.evaluate(last_element);
-        let h_2_first = h_2_poly.evaluate(first_element);
+        let h_1_last = h_1_poly.evaluate(&last_element);
+        let h_2_first = h_2_poly.evaluate(&first_element);
 
         assert_eq!(h_1_last, h_2_first);
     }
@@ -247,7 +250,7 @@ mod test {
         let h_2_poly = h_2.to_polynomial(&domain);
 
         let z_evaluations = compute_accumulator_values(&f, &t, &h_1, &h_2, beta, gamma);
-        let z_poly = Polynomial::from_coefficients_vec(domain.ifft(&z_evaluations));
+        let z_poly = DensePoly::from_coefficients_vec(domain.ifft(&z_evaluations));
 
         let beta_one = Fr::one() + beta;
         let last_element = domain.elements().last().unwrap();
@@ -255,23 +258,27 @@ mod test {
         for (_, element) in domain.elements().enumerate() {
             // Evaluate polynomials
             // evaluate z(X)
-            let z_x = z_poly.evaluate(element);
+            let z_x = z_poly.evaluate(&element);
             // evaluate z(Xg)
-            let z_x_next = z_poly.evaluate(element * domain.group_gen);
+            let group_gen = match domain {
+                GeneralEvaluationDomain::Radix2(dm) => dm.group_gen,
+                GeneralEvaluationDomain::MixedRadix(dm) => dm.group_gen,
+            };
+            let z_x_next = z_poly.evaluate(&(element * group_gen));
             // evaluate f(X)
-            let f_x = f_poly.evaluate(element);
+            let f_x = f_poly.evaluate(&element);
             // evaluate t(X)
-            let t_x = t_poly.evaluate(element);
+            let t_x = t_poly.evaluate(&element);
             // evaluate t(Xg)
-            let t_x_next = t_poly.evaluate(element * domain.group_gen);
+            let t_x_next = t_poly.evaluate(&(element * group_gen));
             // evaluate h_1(X)
-            let h_1_x = h_1_poly.evaluate(element);
+            let h_1_x = h_1_poly.evaluate(&element);
             // evaluate h_1(Xg)
-            let h_1_x_next = h_1_poly.evaluate(element * domain.group_gen);
+            let h_1_x_next = h_1_poly.evaluate(&(element * group_gen));
             // evaluate h_2(X)
-            let h_2_x = h_2_poly.evaluate(element);
+            let h_2_x = h_2_poly.evaluate(&element);
             // evaluate h_2(Xg)
-            let h_2_x_next = h_2_poly.evaluate(element * domain.group_gen);
+            let h_2_x_next = h_2_poly.evaluate(&(element * group_gen));
 
             // LHS = (x - g^n)[z(x) * (1+b) * (gamma + f(x))] ( gamma(1 + beta) + t(x) + beta * t(Xg))
 
@@ -303,11 +310,11 @@ mod test {
         }
 
         // Now check that the last element is equal to 1
-        assert_eq!(z_poly.evaluate(last_element), Fr::one())
+        assert_eq!(z_poly.evaluate(&last_element), Fr::one())
     }
 
     // This is just a helper function to setup tests with values that work
-    fn setup_correct_test() -> (MultiSet, MultiSet, EvaluationDomain<Fr>) {
+    fn setup_correct_test() -> (MultiSet, MultiSet, GeneralEvaluationDomain<Fr>) {
         // n is the amount of witness values
         // d is the amount of table values
         // We need d = n+1
@@ -336,7 +343,7 @@ mod test {
         assert_eq!(t.len().next_power_of_two(), t.len());
 
         // The domain will be n+1
-        let domain: EvaluationDomain<Fr> = EvaluationDomain::new(f.len() + 1).unwrap();
+        let domain = GeneralEvaluationDomain::<Fr>::new(f.len() + 1).unwrap();
 
         (f, t, domain)
     }

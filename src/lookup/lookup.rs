@@ -3,8 +3,8 @@ use super::{
     table::{LookUpTable, PreProcessedTable},
 };
 use crate::{multiset::MultiSet, transcript::TranscriptProtocol};
-use algebra::{bls12_381::Fr, Bls12_381};
-use poly_commit::kzg10::Powers;
+use ark_bls12_381::{Fr, Bls12_381};
+use ark_poly_commit::kzg10::Powers;
 
 pub struct LookUp<T: LookUpTable> {
     table: T,

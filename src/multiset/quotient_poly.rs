@@ -1,6 +1,9 @@
-use algebra::bls12_381::Fr;
-use ff_fft::{DensePolynomial as Polynomial, EvaluationDomain};
+use ark_bls12_381::Fr;
+use ark_poly::{univariate::DensePolynomial as DensePoly, EvaluationDomain, GeneralEvaluationDomain};
 use num_traits::identities::{One, Zero};
+use ark_poly::UVPolynomial;
+use ark_poly::Polynomial;
+
 // The quotient polynomial will encode the four checks for the multiset equality argument
 // These checks are:
 // 1) Z(X) evaluated at the first root of unity is 1
@@ -23,15 +26,15 @@ use num_traits::identities::{One, Zero};
 // Significance: Adding this protocol into PLONK will not "blow up" the degree of the quotient polynomial
 // Where "blow up" denotes increasing the overall degree past 4n for standard plonk
 pub fn compute(
-    domain: &EvaluationDomain<Fr>,
-    z_poly: &Polynomial<Fr>,
-    f_poly: &Polynomial<Fr>,
-    t_poly: &Polynomial<Fr>,
-    h_1_poly: &Polynomial<Fr>,
-    h_2_poly: &Polynomial<Fr>,
+    domain: &GeneralEvaluationDomain<Fr>,
+    z_poly: &DensePoly<Fr>,
+    f_poly: &DensePoly<Fr>,
+    t_poly: &DensePoly<Fr>,
+    h_1_poly: &DensePoly<Fr>,
+    h_2_poly: &DensePoly<Fr>,
     beta: Fr,
     gamma: Fr,
-) -> (Polynomial<Fr>, Polynomial<Fr>) {
+) -> (DensePoly<Fr>, DensePoly<Fr>) {
     // 1. Compute Point check polynomial
     let point_check = compute_point_checks(z_poly, domain);
     //2. Compute interval check polynomial
@@ -46,13 +49,13 @@ pub fn compute(
     sum.divide_by_vanishing_poly(*domain).unwrap()
 }
 
-fn compute_point_checks(z_poly: &Polynomial<Fr>, domain: &EvaluationDomain<Fr>) -> Polynomial<Fr> {
+fn compute_point_checks(z_poly: &DensePoly<Fr>, domain: &GeneralEvaluationDomain<Fr>) -> DensePoly<Fr> {
     // Compute lagrange polynomials
     let l1_poly = compute_n_lagrange_poly(domain, 0);
     let ln_poly = compute_n_lagrange_poly(domain, domain.size() - 1);
 
     // Compute Z'(X) = Z(x) - 1
-    let z_prime_poly = z_poly - &Polynomial::from_coefficients_vec(vec![Fr::one()]);
+    let z_prime_poly = z_poly - &DensePoly::from_coefficients_vec(vec![Fr::one()]);
 
     // We can batch the two point checks into one with the following: (Z(X)-1)[L_1(x) + L_n(x)]
     //
@@ -61,12 +64,12 @@ fn compute_point_checks(z_poly: &Polynomial<Fr>, domain: &EvaluationDomain<Fr>) 
 }
 
 fn compute_interval_check(
-    h_1_poly: &Polynomial<Fr>,
-    h_2_poly: &Polynomial<Fr>,
-    domain: &EvaluationDomain<Fr>,
-) -> Polynomial<Fr> {
+    h_1_poly: &DensePoly<Fr>,
+    h_2_poly: &DensePoly<Fr>,
+    domain: &GeneralEvaluationDomain<Fr>,
+) -> DensePoly<Fr> {
     // Increase domain size by two
-    let domain_2n: EvaluationDomain<Fr> = EvaluationDomain::new(2 * domain.size()).unwrap();
+    let domain_2n = GeneralEvaluationDomain::<Fr>::new(2 * domain.size()).unwrap();
 
     // Compute last lagrange polynomial in evaluation form
     let ln_evals = compute_n_lagrange_evaluations(domain.size(), domain.size() - 1);
@@ -91,20 +94,20 @@ fn compute_interval_check(
         .collect();
 
     // Convert the evaluations for our point check to coefficient form
-    let i_poly = Polynomial::from_coefficients_vec(domain_2n.ifft(&i_evals));
+    let i_poly = DensePoly::from_coefficients_vec(domain_2n.ifft(&i_evals));
     i_poly
 }
 
 pub fn compute_term_check(
-    domain: &EvaluationDomain<Fr>,
-    z_poly: &Polynomial<Fr>,
-    f_poly: &Polynomial<Fr>,
-    t_poly: &Polynomial<Fr>,
-    h_1_poly: &Polynomial<Fr>,
-    h_2_poly: &Polynomial<Fr>,
+    domain: &GeneralEvaluationDomain<Fr>,
+    z_poly: &DensePoly<Fr>,
+    f_poly: &DensePoly<Fr>,
+    t_poly: &DensePoly<Fr>,
+    h_1_poly: &DensePoly<Fr>,
+    h_2_poly: &DensePoly<Fr>,
     beta: Fr,
     gamma: Fr,
-) -> Polynomial<Fr> {
+) -> DensePoly<Fr> {
     // The equation for this is quite big. Similar to PLONK, we can split the point check into two.
     // The first part will compute the grand product Z(X) term
     // The second part will compute the grand product Z(Xg) term
@@ -118,15 +121,15 @@ pub fn compute_term_check(
 }
 // This computes the grand product term for Z(X) or F(\beta, \gamma)
 fn compute_term_check_a(
-    domain: &EvaluationDomain<Fr>,
-    z_poly: &Polynomial<Fr>,
-    f_poly: &Polynomial<Fr>,
-    t_poly: &Polynomial<Fr>,
+    domain: &GeneralEvaluationDomain<Fr>,
+    z_poly: &DensePoly<Fr>,
+    f_poly: &DensePoly<Fr>,
+    t_poly: &DensePoly<Fr>,
     beta: Fr,
     gamma: Fr,
-) -> Polynomial<Fr> {
+) -> DensePoly<Fr> {
     // Increase the domain size by 4
-    let domain_4n: &EvaluationDomain<Fr> = &EvaluationDomain::new(4 * domain.size()).unwrap();
+    let domain_4n = &GeneralEvaluationDomain::<Fr>::new(4 * domain.size()).unwrap();
 
     // Convert all polynomials into evaluation form
     let z_evals = domain_4n.fft(&z_poly);
@@ -169,10 +172,10 @@ fn compute_term_check_a(
         .collect();
 
     // Convert the evaluations for our term check to coefficient form
-    let i_poly = Polynomial::from_coefficients_vec(domain_4n.ifft(&i_evals));
+    let i_poly = DensePoly::from_coefficients_vec(domain_4n.ifft(&i_evals));
 
     assert_eq!(
-        i_poly.evaluate(domain.elements().last().unwrap()),
+        i_poly.evaluate(&domain.elements().last().unwrap()),
         Fr::zero()
     );
 
@@ -180,15 +183,15 @@ fn compute_term_check_a(
 }
 // This computes the grand product term for Z(Xg) or G(\beta, \gamma)
 fn compute_term_check_b(
-    domain: &EvaluationDomain<Fr>,
-    z_poly: &Polynomial<Fr>,
-    h_1_poly: &Polynomial<Fr>,
-    h_2_poly: &Polynomial<Fr>,
+    domain: &GeneralEvaluationDomain<Fr>,
+    z_poly: &DensePoly<Fr>,
+    h_1_poly: &DensePoly<Fr>,
+    h_2_poly: &DensePoly<Fr>,
     beta: Fr,
     gamma: Fr,
-) -> Polynomial<Fr> {
+) -> DensePoly<Fr> {
     // Increase the domain size by 4
-    let domain_4n: &EvaluationDomain<Fr> = &EvaluationDomain::new(4 * domain.size()).unwrap();
+    let domain_4n = &GeneralEvaluationDomain::<Fr>::new(4 * domain.size()).unwrap();
 
     // Convert all polynomials into evaluation form, then add four terms to each evaluation as we need to compute their evaluations at the next root of unity
     let mut z_evals = domain_4n.fft(z_poly);
@@ -237,10 +240,10 @@ fn compute_term_check_b(
         .collect();
 
     // Convert the evaluations for our term check to coefficient form
-    let i_poly = Polynomial::from_coefficients_vec(domain_4n.ifft(&i_evals));
+    let i_poly = DensePoly::from_coefficients_vec(domain_4n.ifft(&i_evals));
 
     assert_eq!(
-        i_poly.evaluate(domain.elements().last().unwrap()),
+        i_poly.evaluate(&domain.elements().last().unwrap()),
         Fr::zero()
     );
 
@@ -251,11 +254,11 @@ fn compute_term_check_b(
 // Easiest way is to compute the evaluation points, which will be zero at every position except for n
 // Then IFFT to get the coefficient form
 // Note: n=0 is the first lagrange polynomial and n = domain.size() -1 is the last lagrange polynomial
-pub fn compute_n_lagrange_poly(domain: &EvaluationDomain<Fr>, n: usize) -> Polynomial<Fr> {
+pub fn compute_n_lagrange_poly(domain: &GeneralEvaluationDomain<Fr>, n: usize) -> DensePoly<Fr> {
     assert!(n <= domain.size() - 1);
     let mut evaluations = compute_n_lagrange_evaluations(domain.size(), n);
     domain.ifft_in_place(&mut evaluations);
-    Polynomial::from_coefficients_vec(evaluations)
+    DensePoly::from_coefficients_vec(evaluations)
 }
 fn compute_n_lagrange_evaluations(domain_size: usize, n: usize) -> Vec<Fr> {
     let mut lagrange_evaluations = vec![Fr::zero(); domain_size];
@@ -266,6 +269,8 @@ fn compute_n_lagrange_evaluations(domain_size: usize, n: usize) -> Vec<Fr> {
 mod test {
     use super::*;
     use crate::multiset::{multiset_equality::*, MultiSet};
+    use ark_poly::UVPolynomial;
+    use ark_poly::univariate::DensePolynomial as DensePoly;
     #[test]
     fn test_quotient_poly() {
         // Compute f
@@ -282,7 +287,7 @@ mod test {
         t.push(Fr::from(5u8));
 
         // Setup domain
-        let domain: EvaluationDomain<Fr> = EvaluationDomain::new(f.len()).unwrap();
+        let domain = EvaluationDomain::new(f.len()).unwrap();
         let beta = Fr::from(10u8);
         let gamma = Fr::from(11u8);
 
@@ -302,7 +307,7 @@ mod test {
 
         // Compute Z(x) poly
         let z_evaluations = compute_accumulator_values(&f, &t, &h_1, &h_2, beta, gamma);
-        let z_poly = Polynomial::from_coefficients_vec(domain.ifft(&z_evaluations));
+        let z_poly = DensePoly::from_coefficients_vec(domain.ifft(&z_evaluations));
 
         let (_, remainder) = compute(
             &domain, &z_poly, &f_poly, &t_poly, &h_1_poly, &h_2_poly, beta, gamma,
