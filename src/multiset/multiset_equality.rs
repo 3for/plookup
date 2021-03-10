@@ -24,7 +24,7 @@ fn compute_f_i(i: usize, f: &MultiSet, t: &MultiSet, beta: Fr, gamma: Fr) -> Fr 
     (gamma + f.0[i]) * (gamma_beta_one + t.0[i] + (beta * t.0[i + 1]))
 }
 
-// Computes the i+1'th term of F(beta, gamma)
+// Computes the i+1'th term of G(beta, gamma)
 fn compute_g_i(i: usize, h_1: &MultiSet, h_2: &MultiSet, beta: Fr, gamma: Fr) -> Fr {
     let gamma_one_b = gamma * (Fr::one() + beta);
 
@@ -293,7 +293,7 @@ mod test {
 
             let lhs = a * b * c;
 
-            // RHS = z(Xg)(x - g^n) [gamma *(1 + beta) + h_1(X) + beta*h_1(Xg)] [gamma * (1 + beta)] + h_2(X) + (beta * h_2(Xg))
+            // RHS = z(Xg)(x - g^n) [gamma *(1 + beta) + h_1(X) + beta*h_1(Xg)] [gamma * (1 + beta) + h_2(X) + (beta * h_2(Xg))]
 
             // z(Xg)(x - g^n)
             let a = z_x_next * (element - last_element);

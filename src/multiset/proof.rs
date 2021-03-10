@@ -32,8 +32,8 @@ pub struct Commitments {
     pub z: Commitment<Bls12_381>,
 }
 
-// In the best case, this protocol requires 4 extra G1 elements (Commitment)
-// These are: h_1_commit,h_2_commit, f_commit,t_commit
+// In the best case, this protocol requires 3 extra G1 elements (Commitment)
+// These are: h_1_commit,h_2_commit, f_commit
 //
 // The commitment to the accumulator and the quotient polynomial would ideally be joined into the existing ones in PLONK
 //
